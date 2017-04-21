@@ -10,9 +10,9 @@ import random
 import sys
 
 import tensorflow as tf
-from tensorflow.contrib import rnn
 import numpy as np
 
+import tensorflow.contrib.rnn as rnn
 from phrase_tree import PhraseTree, FScore
 from features import FeatureMapper
 from parser import Parser

@@ -6,7 +6,6 @@ from __future__ import print_function
 from __future__ import division
 
 import numpy as np
-import dynet
 from collections import defaultdict
 
 from phrase_tree import PhraseTree, FScore
@@ -263,9 +262,6 @@ class Parser(object):
         Only data from this parse, including mandatory S-actions.
             Follow softmax distribution for structural data.
         """
-
-        dynet.renew_cg()
-        network.prep_params()
 
         struct_data = {}
         label_data = {}
