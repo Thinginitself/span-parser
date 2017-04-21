@@ -25,7 +25,7 @@ def wrapper_indices(b):
     g = tf.concat([f,c],axis=2)
     return g
 
-def gather_axis(params, indices, batch_dim=0):
+def gather_axis(params, indices):
     wrap = wrapper_indices(indices)
     return tf.gather_nd(params, wrap)
 
@@ -179,7 +179,7 @@ class Network(object):
         init = tf.global_variables_initializer()
         self.sess.run(init)
 
-    def save(save_path):
+    def save(self, save_path):
         self.saver.save(self.sess, save_path)
         with open(save_path+'.config', 'w') as f:
             f.write('\n')

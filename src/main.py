@@ -187,8 +187,6 @@ if __name__ == '__main__':
             import numpy as np
             np.random.seed(args.np_seed)
 
-        print('L2 regularization: {}'.format(args.dynet_l2))
-
         Network.train(
             feature_mapper=fm,
             word_dims=args.word_dims,
