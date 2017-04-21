@@ -300,17 +300,16 @@ class Network(object):
         alpha=1.0,
         beta=0.0,
     ):
-        start_time = time.time()
+        print('start taining! ^_^')
+        point_1 = time.clock()
         fm = feature_mapper
         word_count = fm.total_words()
         tag_count = fm.total_tags()
-        print("now0")
-
         training_data, max_seq_len = fm.gold_data_from_file(train_data_file)
         num_batches = len(training_data) // batch_size
-
         dev_trees = PhraseTree.load_treefile(dev_data_file)
-
+        point_2 = time.clock()
+        print('finish prepare train data! %f' % (point_2-point_1))
         network = Network(
             word_count=word_count,
             tag_count=tag_count,
@@ -322,7 +321,10 @@ class Network(object):
             label_out=fm.total_label_actions(),
             max_seq_len=max_seq_len
         )
-        parse_step = 10
+        point_3 = time.clock()
+        print('finish construct network! %f' % (point_3-point_2))
+        parse_step = -(-num_batches // 4)
+        loss_show_step = 10
         best_acc = FScore()
         for epoch in xrange(epochs):
             np.random.shuffle(training_data)
@@ -346,14 +348,15 @@ class Network(object):
                     network.keep_prob:droprate,
                 }
                 network.sess.run(network.optimizer, feed_dict=train_feed_dict)
-                if b % parse_step == 0 or b == (num_batches - 1):
+                if b % loss_show_step == 0:
                     loss = network.sess.run(network.cost, feed_dict=train_feed_dict)
+                    print('loss %f' % (loss))
+                if b % parse_step == 0 or b == (num_batches - 1):
                     dev_acc = Parser.evaluate_corpus(
                         dev_trees,
                         fm,
                         network,
                     )
-                    print('loss %f' % (loss))
                     print(dev_acc)
                     if dev_acc > best_acc:
                         best_acc = dev_acc 
