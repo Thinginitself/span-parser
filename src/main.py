@@ -171,7 +171,7 @@ if __name__ == '__main__':
 
     if args.test is not None:
         from phrase_tree import PhraseTree
-        from network import Network
+        from tens_network import Network
         from parser import Parser
 
         test_trees = PhraseTree.load_treefile(args.test)
@@ -181,7 +181,7 @@ if __name__ == '__main__':
         accuracy = Parser.evaluate_corpus(test_trees, fm, network)
         print('Accuracy: {}'.format(accuracy))
     elif args.train is not None:
-        from network import Network
+        from tens_network import Network
 
         if args.np_seed is not None:
             import numpy as np

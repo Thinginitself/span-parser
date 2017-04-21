@@ -244,8 +244,10 @@ class FeatureMapper(object):
         """
         trees = PhraseTree.load_treefile(fname)
         result = []
+        max_l = 0
+        total_len = 0
         for tree in trees:
             sentence_data = self.gold_data(tree)
             result.append(sentence_data)
-        return result
-
+            max_l = max(max_l, len(sentence_data['w']))
+        return result, max_l

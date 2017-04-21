@@ -11,6 +11,8 @@ from collections import defaultdict
 
 from phrase_tree import PhraseTree, FScore
 
+def warp_one_dim(x):
+    return np.array([x])
 
 class Parser(object):
   
@@ -357,44 +359,48 @@ class Parser(object):
     @staticmethod
     def parse(sentence, fm, network):
 
-        dynet.renew_cg()
-        network.prep_params()
-
         n = len(sentence)
         state = Parser(n)
 
         w, t = fm.sentence_sequences(sentence)
+        fetches = [network.struct_fwd_lstm_layer, network.struct_back_lstm_layer]
 
-        fwd, back = network.evaluate_recurrent(w, t, test=True)
+        for i in xrange(network.max_seq_len-len(w)):
+            w = np.append(w, 0)
+            t = np.append(t, 0)
 
+        feed_dict = {network.struct_word_inds:warp_one_dim(w),
+                        network.struct_tag_inds:warp_one_dim(t),
+                        network.struct_seq_len:warp_one_dim(len(w)),
+                        network.keep_prob:1.0}
+        fwd, back = network.sess.run(fetches, feed_dict=feed_dict)
         for step in xrange(2 * n - 1):
-
             if not state.can_combine():
                 action = 'sh'
             elif not state.can_shift():
                 action = 'comb'
             else:
                 left, right = state.s_features()
-                scores = network.evaluate_struct(
-                    fwd,
-                    back,
-                    left,
-                    right,
-                    test=True,
-                ).npvalue()
+                left, right = warp_one_dim(left), warp_one_dim(right)
+                struct_feed_dict = {network.struct_fwd_lstm_layer:fwd,
+                                        network.struct_back_lstm_layer:back,
+                                        network.struct_lefts:left,
+                                        network.struct_rights:right,
+                                        network.keep_prob:1.0}
+                scores = network.sess.run(network.struct_scores, feed_dict=struct_feed_dict)[0]
                 action_index = np.argmax(scores)
                 action = fm.s_action(action_index)
             state.take_action(action)
 
 
             left, right = state.l_features()
-            scores = network.evaluate_label(
-                fwd,
-                back,
-                left,
-                right,
-                test=True,
-            ).npvalue()
+            left, right = warp_one_dim(left), warp_one_dim(right)
+            label_feed_dict = {network.label_fwd_lstm_layer:fwd,
+                                        network.label_back_lstm_layer:back,
+                                        network.label_lefts:left,
+                                        network.label_rights:right,
+                                        network.keep_prob:1.0}
+            scores = network.sess.run(network.label_scores, feed_dict=label_feed_dict)[0]
             if step < (2 * n - 2):
                 action_index = np.argmax(scores)
             else:
