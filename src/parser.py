@@ -423,6 +423,7 @@ class Parser(object):
             print('parse %d - %d' % (num, total))
             num += 1
             local_accuracy = predicted.compare(tree)
+            print(local_accuracy)
             accuracy += local_accuracy
         return accuracy
 

@@ -18,16 +18,23 @@ from features import FeatureMapper
 from parser import Parser
 
 def wrapper_indices(b):
-    c = tf.expand_dims(b,2)
+    c = tf.expand_dims(b, -1)
     d = tf.stack([tf.range(0, tf.shape(b)[0], dtype=tf.int32) for i in range(b.get_shape()[1])])
     e = tf.matrix_transpose(d)
-    f = tf.expand_dims(e,2)
-    g = tf.concat([f,c],axis=2)
+    f = tf.expand_dims(e, -1)
+    g = tf.concat([f,c], axis=-1)
     return g
 
 def gather_axis(params, indices):
     wrap = wrapper_indices(indices)
     return tf.gather_nd(params, wrap)
+
+def another_gather(params, indices):
+    c = tf.expand_dims(indices, -1)
+    d = tf.range(0, tf.shape(indices)[0], dtype=tf.int32)
+    e = tf.expand_dims(d, -1)
+    f = tf.concat([e,c], axis=-1)
+    return tf.gather_nd(params, f)
 
 def prapare_data(data_list, max_len):
     ans = {}
@@ -110,9 +117,9 @@ class Network(object):
         random.seed(1)
 
         self.word_embed = tf.Variable(tf.random_uniform(
-            (word_count, word_dims), -1.0, 1.0, dtype=tf.float32), name='word_embed', dtype=tf.float32)
+            (word_count, word_dims), -0.01, 0.01, dtype=tf.float32), name='word_embed', dtype=tf.float32)
         self.tag_embed = tf.Variable(tf.random_uniform(
-            (tag_count, tag_dims), -1.0, 1.0, dtype=tf.float32), name='tag_embed', dtype=tf.float32)
+            (tag_count, tag_dims), -0.01, 0.01, dtype=tf.float32), name='tag_embed', dtype=tf.float32)
 
         self.struct_word_inds = tf.placeholder(
             tf.int32, [None, self.max_seq_len], name='struct_word_inds')
@@ -158,21 +165,28 @@ class Network(object):
             self.struct_fwd_lstm_layer, self.struct_back_lstm_layer, self.struct_lefts, self.struct_rights)
         self.label_feature_layer = self.gather_lstm_feature(
             self.label_fwd_lstm_layer, self.label_back_lstm_layer, self.label_lefts, self.label_rights)
+        
         self.struct_scores = self.evaluate_struct(
             self.struct_feature_layer, self.keep_prob)
         self.label_scores = self.evaluate_label(
             self.label_feature_layer, self.keep_prob)
+        #self.struct_scores = tf.Print(struct_scores, [struct_scores], message='struct_scores:')
+        #self.label_scores = tf.Print(label_scores, [label_scores], message='label_scores:')
 
-        struct_actions_one_hot = tf.cast(tf.one_hot(self.struct_actions, depth=self.struct_out), tf.float32)
-        label_actions_one_hot = tf.cast(tf.one_hot(self.label_actions, depth=self.label_out), tf.float32)
-        self.struct_loss = tf.nn.softmax_cross_entropy_with_logits(
-            labels=struct_actions_one_hot, logits=self.struct_scores)
-        self.label_loss = tf.nn.softmax_cross_entropy_with_logits(
-            labels=label_actions_one_hot, logits=self.label_scores)
-        self.cost = tf.reduce_mean(self.struct_loss) + \
-            tf.reduce_mean(self.label_loss)
-        self.optimizer = tf.train.AdadeltaOptimizer(
-            epsilon=1e-07, rho=0.99).minimize(self.cost)
+        self.struct_softmax = tf.nn.softmax(self.struct_scores)
+        self.label_softmax = tf.nn.softmax(self.label_scores)
+        self.struct_softmax = tf.Print(self.struct_softmax, [self.struct_softmax], message='struct_softmax')
+        self.label_softmax = tf.Print(self.label_softmax, [self.label_softmax], message='label_softmax')
+        print(self.struct_softmax.get_shape())
+        self.struct_loss = -tf.log(another_gather(self.struct_softmax, self.struct_actions))
+        self.label_loss = -tf.log(another_gather(self.label_softmax, self.label_actions))
+        print(self.struct_loss.get_shape())
+
+        self.cost = tf.reduce_sum(self.struct_loss) + tf.reduce_sum(self.label_loss)
+        #self.optimizer = tf.train.AdadeltaOptimizer(
+        #    epsilon=1e-07, rho=0.99).minimize(self.cost)
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=0.01).minimize(self.cost)
+
         self.saver = tf.train.Saver()
 
         self.sess = tf.Session()
@@ -259,12 +273,12 @@ class Network(object):
         return tf.reshape(hidden_output, [-1, tf.shape(hidden_output)[1]*tf.shape(hidden_output)[2]])
 
     def evaluate_struct(self, hidden, keep_prob):
-        self.W1_struct = tf.Variable(tf.random_normal(
-            [4*self.struct_spans*self.lstm_units, self.hidden_units]))
-        self.b1_struct = tf.Variable(tf.random_normal([self.hidden_units]))
-        self.W2_struct = tf.Variable(tf.random_normal(
-            [self.hidden_units, self.struct_out]))
-        self.b2_struct = tf.Variable(tf.random_normal([self.struct_out]))
+        uniform_init = tf.random_uniform_initializer(-0.01, 0.01)
+        cons_init = tf.constant_initializer(0)
+        self.W1_struct = tf.get_variable('w1_struct', shape=[4*self.struct_spans*self.lstm_units, self.hidden_units], initializer=uniform_init)
+        self.b1_struct = tf.get_variable('b1_struct', shape=[self.hidden_units], initializer=cons_init)
+        self.W2_struct = tf.get_variable('w2_struct', shape=[self.hidden_units, self.struct_out], initializer=cons_init)
+        self.b2_struct = tf.get_variable('b2_struct', shape=[self.struct_out], initializer=cons_init)
         drop_hidden = tf.nn.dropout(hidden, keep_prob)
         hidden_output = tf.nn.relu(tf.matmul(
                 drop_hidden, self.W1_struct) + self.b1_struct)
@@ -272,12 +286,12 @@ class Network(object):
         return scores
 
     def evaluate_label(self, hidden, keep_prob):
-        self.W1_label = tf.Variable(tf.random_normal(
-            [4*self.label_spans*self.lstm_units, self.hidden_units]))
-        self.b1_label = tf.Variable(tf.random_normal([self.hidden_units]))
-        self.W2_label = tf.Variable(tf.random_normal(
-            [self.hidden_units, self.label_out]))
-        self.b2_label = tf.Variable(tf.random_normal([self.label_out]))
+        uniform_init = tf.random_uniform_initializer(-0.01, 0.01)
+        cons_init = tf.constant_initializer(0)
+        self.W1_label = tf.get_variable('w1_label', shape=[4*self.label_spans*self.lstm_units, self.hidden_units], initializer=uniform_init)
+        self.b1_label = tf.get_variable('b1_label', shape=[self.hidden_units], initializer=cons_init)
+        self.W2_label = tf.get_variable('w2_label', shape=[self.hidden_units, self.label_out], initializer=cons_init)
+        self.b2_label = tf.get_variable('b2_label', shape=[self.label_out], initializer=cons_init)
         drop_hidden = tf.nn.dropout(hidden, keep_prob)
         hidden_output = tf.nn.relu(tf.matmul(
             drop_hidden, self.W1_label) + self.b1_label)
@@ -327,7 +341,7 @@ class Network(object):
         parse_step = -(-num_batches // 4)
         loss_show_step = 10
         best_acc = FScore()
-        for epoch in xrange(epochs):
+        for epoch in xrange(1000):
             np.random.shuffle(training_data)
             for b in xrange(num_batches):
                 print('train %d epch %d bacth' % (epoch, b))
@@ -353,7 +367,7 @@ class Network(object):
                     loss = network.sess.run(network.cost, feed_dict=train_feed_dict)
                     num = len(gold_training_data['struct_actions']) + len(gold_training_data['label_actions'])
                     print('mean loss %f' % (loss/num))
-                if b % parse_step == 0 or b == (num_batches - 1):
+                if False and b % loss_show_step*2 == 0 or b == (num_batches - 1):
                     dev_acc = Parser.evaluate_corpus(
                         dev_trees,
                         fm,
