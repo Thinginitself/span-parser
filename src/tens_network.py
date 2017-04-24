@@ -172,7 +172,7 @@ class Network(object):
         self.cost = tf.reduce_mean(self.struct_loss) + \
             tf.reduce_mean(self.label_loss)
         self.optimizer = tf.train.AdadeltaOptimizer(
-            epsilon=1e-08, rho=0.99).minimize(self.cost)
+            epsilon=1e-07, rho=0.99).minimize(self.cost)
         self.saver = tf.train.Saver()
 
         self.sess = tf.Session()
@@ -197,6 +197,7 @@ class Network(object):
     @staticmethod
     def load(load_path):
         with open(load_path+'.config') as f:
+            f.readline()
             word_count = int(f.readline().split()[-1])
             tag_count = int(f.readline().split()[-1])
             word_dims = int(f.readline().split()[-1])
@@ -350,7 +351,8 @@ class Network(object):
                 network.sess.run(network.optimizer, feed_dict=train_feed_dict)
                 if b % loss_show_step == 0:
                     loss = network.sess.run(network.cost, feed_dict=train_feed_dict)
-                    print('loss %f' % (loss))
+                    num = len(gold_training_data['struct_actions']) + len(gold_training_data['label_actions'])
+                    print('mean loss %f' % (loss/num))
                 if b % parse_step == 0 or b == (num_batches - 1):
                     dev_acc = Parser.evaluate_corpus(
                         dev_trees,

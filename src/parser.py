@@ -416,8 +416,12 @@ class Parser(object):
     @staticmethod
     def evaluate_corpus(trees, fm, network):
         accuracy = FScore()
+        num = 0
+        total = len(trees)
         for tree in trees:
             predicted = Parser.parse(tree.sentence, fm, network)
+            print('parse %d - %d' % (num, total))
+            num += 1
             local_accuracy = predicted.compare(tree)
             accuracy += local_accuracy
         return accuracy
