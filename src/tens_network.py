@@ -29,6 +29,8 @@ def gather_axis(params, indices):
     wrap = wrapper_indices(indices)
     return tf.gather_nd(params, wrap)
 
+
+
 def another_gather(params, indices):
     c = tf.expand_dims(indices, -1)
     d = tf.range(0, tf.shape(indices)[0], dtype=tf.int32)
@@ -367,7 +369,7 @@ class Network(object):
                     loss = network.sess.run(network.cost, feed_dict=train_feed_dict)
                     num = len(gold_training_data['struct_actions']) + len(gold_training_data['label_actions'])
                     print('mean loss %f' % (loss/num))
-                if False and b % loss_show_step*2 == 0 or b == (num_batches - 1):
+                if  b % loss_show_step*2 == 0 or b == (num_batches - 1):
                     dev_acc = Parser.evaluate_corpus(
                         dev_trees,
                         fm,
